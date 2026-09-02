@@ -1,0 +1,87 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowedServicesCeiling",
+      "Effect": "Allow",
+      "Action": [
+        "s3:*",
+        "lambda:*",
+        "logs:*",
+        "sts:GetCallerIdentity"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "DenyIamPrivilegeEscalation",
+      "Effect": "Deny",
+      "Action": [
+        "iam:CreateUser",
+        "iam:CreateAccessKey",
+        "iam:AttachUserPolicy",
+        "iam:PutUserPolicy",
+        "iam:CreateRole",
+        "iam:DeleteRole",
+        "iam:AttachRolePolicy",
+        "iam:PutRolePolicy",
+        "iam:DetachRolePolicy",
+        "iam:DeleteRolePolicy",
+        "iam:UpdateAssumeRolePolicy",
+        "iam:CreatePolicyVersion",
+        "iam:SetDefaultPolicyVersion",
+        "iam:PutRolePermissionsBoundary",
+        "iam:DeleteRolePermissionsBoundary",
+        "iam:CreateOpenIDConnectProvider",
+        "iam:DeleteOpenIDConnectProvider",
+        "iam:UpdateOpenIDConnectProviderThumbprint"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "DenyOutsideAllowedRegions",
+      "Effect": "Deny",
+      "NotAction": [
+        "iam:*",
+        "sts:*",
+        "cloudfront:*",
+        "route53:*",
+        "support:*"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringNotEquals": {
+          "aws:RequestedRegion": [
+            "us-east-1",
+            "us-east-2"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "DenyUntaggedResourceCreation",
+      "Effect": "Deny",
+      "Action": [
+        "s3:CreateBucket",
+        "lambda:CreateFunction"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "Null": {
+          "aws:RequestTag/Environment": "true"
+        }
+      }
+    },
+    {
+      "Sid": "DenyOutsideProjectResourcePrefix",
+      "Effect": "Deny",
+      "Action": [
+        "s3:DeleteBucket",
+        "s3:PutBucketPolicy",
+        "s3:PutBucketAcl"
+      ],
+      "NotResource": [
+        "arn:aws:s3:::<PROJECT>-*"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+name: Deploy - Dev
+
+on:
+  push:
+    branches: [main]
+
+# id-token: write é o que permite o runner solicitar um token OIDC do
+# GitHub -- sem isso, aws-actions/configure-aws-credentials falha ao tentar
+# autenticar via AssumeRoleWithWebIdentity.
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to Dev
+    runs-on: ubuntu-latest
+    # Sem "environment:" de propósito -- dev não exige aprovação manual.
+    # O gate de segurança aqui é o IAM: a trust policy da role de dev só
+    # aceita chamadas vindas de "ref:refs/heads/main" (ver
+    # envs/dev/trust-policy.tf), então mesmo sem aprovação humana, nenhum
+    # outro branch consegue assumir esta role.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::<AWS_ACCOUNT_ID>:role/<PROJECT>-dev-deploy
+          aws-region: us-east-1
+          role-session-name: gha-dev-${{ github.run_id }}
+
+      - name: Sync build output to S3 (dev)
+        run: |
+          aws s3 sync ./dist "s3://<PROJECT>-dev-deploy-artifacts" --delete
+
+      - name: Update Lambda function code (dev)
+        run: |
+          aws lambda update-function-code \
+            --function-name "<PROJECT>-dev-api" \
+            --s3-bucket "<PROJECT>-dev-deploy-artifacts" \
+            --s3-key "function.zip"

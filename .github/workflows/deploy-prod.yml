@@ -1,0 +1,47 @@
+name: Deploy - Prod
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    # "environment: production" é o que amarra este job ao GitHub
+    # Environment configurado em Settings > Environments do repositório,
+    # com "Required reviewers" habilitado. O job fica PARADO aguardando
+    # aprovação manual antes de rodar qualquer step -- inclusive antes de
+    # solicitar o token OIDC. É também o que faz o claim "sub" do token
+    # conter ":environment:production", que é exatamente o que a trust
+    # policy da role de prod exige (ver envs/prod/trust-policy.tf). Ou
+    # seja: o nome abaixo precisa bater EXATAMENTE com
+    # var.github_environment usado no Terraform de envs/prod.
+    environment:
+      name: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::<AWS_ACCOUNT_ID>:role/<PROJECT>-prod-deploy
+          aws-region: us-east-1
+          role-session-name: gha-prod-${{ github.run_id }}
+
+      - name: Sync build output to S3 (prod)
+        run: |
+          aws s3 sync ./dist "s3://<PROJECT>-prod-deploy-artifacts"
+
+      - name: Update Lambda function code (prod)
+        run: |
+          aws lambda update-function-code \
+            --function-name "<PROJECT>-prod-api" \
+            --s3-bucket "<PROJECT>-prod-deploy-artifacts" \
+            --s3-key "function.zip"

@@ -1,0 +1,15 @@
+# Copie este arquivo para "backend.tf" (sem o .example) e preencha os
+# placeholders antes de rodar "terraform init". Recomenda-se um bucket S3
+# com versionamento + criptografia habilitados e uma tabela DynamoDB para
+# locking (ou o locking nativo do backend S3 em versões recentes do
+# Terraform, se preferir não usar DynamoDB).
+#
+# terraform {
+#   backend "s3" {
+#     bucket         = "<TERRAFORM_STATE_BUCKET>"
+#     key            = "<PROJECT>/shared/terraform.tfstate"
+#     region         = "us-east-1"
+#     dynamodb_table = "<TERRAFORM_LOCK_TABLE>"
+#     encrypt        = true
+#   }
+# }

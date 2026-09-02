@@ -1,0 +1,40 @@
+name: Deploy - Staging
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    # Mesmo padrão de dev: sem GitHub Environment / aprovação manual.
+    # Se o seu processo exigir aprovação para staging também, copie o
+    # padrão usado em deploy-prod.yml (bloco "environment:") e ajuste a
+    # trust policy em envs/staging/trust-policy.tf para usar o claim
+    # ":environment:<nome>" em vez de ":ref:refs/heads/<branch>".
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::<AWS_ACCOUNT_ID>:role/<PROJECT>-staging-deploy
+          aws-region: us-east-1
+          role-session-name: gha-staging-${{ github.run_id }}
+
+      - name: Sync build output to S3 (staging)
+        run: |
+          aws s3 sync ./dist "s3://<PROJECT>-staging-deploy-artifacts" --delete
+
+      - name: Update Lambda function code (staging)
+        run: |
+          aws lambda update-function-code \
+            --function-name "<PROJECT>-staging-api" \
+            --s3-bucket "<PROJECT>-staging-deploy-artifacts" \
+            --s3-key "function.zip"

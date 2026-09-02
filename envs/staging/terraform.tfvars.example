@@ -1,0 +1,15 @@
+# Copie para terraform.tfvars e preencha com valores reais.
+# NUNCA commite o terraform.tfvars real.
+
+aws_region = "us-east-1"
+project    = "<PROJECT>"
+owner      = "<OWNER>"
+account_id = "<AWS_ACCOUNT_ID>"
+
+oidc_provider_arn        = "<OIDC_PROVIDER_ARN>"
+permissions_boundary_arn = "<PERMISSIONS_BOUNDARY_ARN>"
+
+github_org  = "<ORG>"
+github_repo = "<REPO>"
+
+allowed_branch = "main"

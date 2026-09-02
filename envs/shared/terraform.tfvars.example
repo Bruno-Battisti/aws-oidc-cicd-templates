@@ -1,0 +1,6 @@
+# Copie para terraform.tfvars e preencha com valores reais do seu projeto.
+# NUNCA commite o terraform.tfvars real -- veja .gitignore na raiz do repo.
+
+aws_region = "us-east-1"
+project    = "<PROJECT>"
+owner      = "<OWNER>"

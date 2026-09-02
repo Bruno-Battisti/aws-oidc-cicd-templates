@@ -1,0 +1,11 @@
+# Copie para "backend.tf" e preencha os placeholders.
+#
+# terraform {
+#   backend "s3" {
+#     bucket         = "<TERRAFORM_STATE_BUCKET>"
+#     key            = "<PROJECT>/staging/terraform.tfstate"
+#     region         = "us-east-1"
+#     dynamodb_table = "<TERRAFORM_LOCK_TABLE>"
+#     encrypt        = true
+#   }
+# }
