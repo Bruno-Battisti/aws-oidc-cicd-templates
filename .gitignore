@@ -13,7 +13,14 @@ override.tf.json
 *_override.tf.json
 .terraformrc
 terraform.rc
+
+# .terraform.lock.hcl é ignorado por padrão (não faz sentido em
+# modules/*, que são reutilizáveis e não devem fixar versão de provider),
+# mas é reincluído explicitamente para os roots em envs/* -- lá ele
+# garante que todo mundo (e a CI) usa exatamente o mesmo provider AWS,
+# conforme a própria recomendação do "terraform init".
 .terraform.lock.hcl
+!/envs/*/.terraform.lock.hcl
 
 # Backend real (gerado a partir de backend.tf.example)
 backend.tf

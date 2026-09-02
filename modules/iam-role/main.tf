@@ -2,6 +2,14 @@
 # IAM Role parametrizável para autenticação federada GitHub Actions -> AWS
 # -----------------------------------------------------------------------------
 
+locals {
+  # A tag Environment é derivada de var.environment, não copiada cegamente
+  # de var.tags -- isso garante por construção que a tag nunca destoa do
+  # ambiente real da role, mesmo que quem chame o módulo erre o valor em
+  # var.tags (ex: copiar/colar tags de outro ambiente).
+  tags = merge(var.tags, { Environment = var.environment })
+}
+
 resource "aws_iam_role" "this" {
   name                 = var.role_name
   assume_role_policy   = var.trust_policy_json
@@ -13,7 +21,7 @@ resource "aws_iam_role" "this" {
   # "DeleteConflict" no terraform destroy.
   force_detach_policies = true
 
-  tags = var.tags
+  tags = local.tags
 }
 
 # Policy inline em vez de um recurso standalone: assim ela vive e morre com a

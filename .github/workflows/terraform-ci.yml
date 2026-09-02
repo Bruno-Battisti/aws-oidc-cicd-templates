@@ -1,0 +1,112 @@
+name: Terraform CI
+
+# Roda em PRs e pushes para main que tocam arquivos Terraform. Não precisa
+# de nenhuma credencial AWS: fmt, validate e tflint são checagens estáticas
+# de configuração, não tocam em nenhum recurso real nem em state remoto.
+on:
+  pull_request:
+    paths:
+      - "**/*.tf"
+      - ".tflint.hcl"
+      - ".github/workflows/terraform-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "**/*.tf"
+      - ".tflint.hcl"
+      - ".github/workflows/terraform-ci.yml"
+
+permissions:
+  contents: read
+
+env:
+  TERRAFORM_VERSION: "1.16.0"
+
+jobs:
+  fmt:
+    name: terraform fmt
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - name: Check formatting
+        run: terraform fmt -check -recursive -diff
+
+  validate:
+    name: validate (${{ matrix.dir }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dir:
+          - modules/oidc-provider
+          - modules/iam-role
+          - envs/shared
+          - envs/dev
+          - envs/staging
+          - envs/prod
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      # -backend=false: o CI nunca deve tentar autenticar num backend S3
+      # remoto real. validate não precisa de state nem de credenciais AWS,
+      # só analisa a configuração estaticamente.
+      - name: terraform init
+        working-directory: ${{ matrix.dir }}
+        run: terraform init -backend=false -input=false
+
+      - name: terraform validate
+        working-directory: ${{ matrix.dir }}
+        run: terraform validate
+
+  tflint:
+    name: tflint (${{ matrix.dir }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dir:
+          - modules/oidc-provider
+          - modules/iam-role
+          - envs/shared
+          - envs/dev
+          - envs/staging
+          - envs/prod
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup tflint
+        uses: terraform-linters/setup-tflint@v6
+        with:
+          tflint_version: v0.64.0
+
+      - name: Cache tflint plugins
+        uses: actions/cache@v4
+        with:
+          path: ~/.tflint.d/plugins
+          key: tflint-${{ runner.os }}-${{ hashFiles('.tflint.hcl') }}
+
+      - name: Init tflint plugins
+        working-directory: ${{ matrix.dir }}
+        run: tflint --init --config "${{ github.workspace }}/.tflint.hcl"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run tflint
+        working-directory: ${{ matrix.dir }}
+        run: tflint --config "${{ github.workspace }}/.tflint.hcl" --format compact
