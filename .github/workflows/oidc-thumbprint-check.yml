@@ -1,0 +1,69 @@
+name: OIDC Thumbprint Check
+
+# Compara o thumbprint configurado no IAM OIDC Provider (modules/oidc-provider)
+# com o thumbprint real da cadeia de CA de token.actions.githubusercontent.com.
+# A AWS hoje valida a cadeia automaticamente para emissores conhecidos como o
+# do GitHub (o argumento thumbprint_list é mantido só por compatibilidade com
+# o schema do recurso), mas manter esse valor visivelmente desatualizado é um
+# sinal de que ninguém revisita esta configuração -- este workflow existe
+# para não depender de alguém lembrar de checar manualmente.
+on:
+  schedule:
+    - cron: "0 6 * * 1" # toda segunda, 06:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  check-thumbprint:
+    name: Check OIDC thumbprint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials (OIDC, read-only)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.CI_PLAN_ROLE_ARN }}
+          aws-region: ${{ vars.TF_STATE_REGION }}
+          role-session-name: gha-thumbprint-check-${{ github.run_id }}
+
+      - name: Compare configured vs. live thumbprint
+        run: |
+          set -euo pipefail
+
+          OIDC_PROVIDER_ARN="${{ vars.OIDC_PROVIDER_ARN }}"
+          if [ -z "$OIDC_PROVIDER_ARN" ]; then
+            echo "::error::Repo variable OIDC_PROVIDER_ARN não está configurada (output oidc_provider_arn de envs/shared)."
+            exit 1
+          fi
+
+          CONFIGURED=$(aws iam get-open-id-connect-provider \
+            --open-id-connect-provider-arn "$OIDC_PROVIDER_ARN" \
+            --query 'ThumbprintList[0]' --output text)
+
+          # O thumbprint_list do recurso IAM historicamente se refere ao
+          # certificado raiz/topo da cadeia apresentada pelo servidor, não
+          # ao certificado folha -- por isso pegamos o ÚLTIMO certificado do
+          # -showcerts, não o primeiro.
+          CHAIN_DIR=$(mktemp -d)
+          openssl s_client -connect token.actions.githubusercontent.com:443 \
+            -servername token.actions.githubusercontent.com -showcerts </dev/null 2>/dev/null \
+            | awk -v dir="$CHAIN_DIR" '/BEGIN CERTIFICATE/{n++} {print > (dir "/cert" n ".pem")}'
+          LAST_CERT=$(ls "$CHAIN_DIR"/cert*.pem | sort -V | tail -n1)
+
+          LIVE=$(openssl x509 -in "$LAST_CERT" -fingerprint -sha1 -noout \
+            | sed -e 's/^.*Fingerprint=//' -e 's/://g' | tr '[:upper:]' '[:lower:]')
+
+          echo "Thumbprint configurado na AWS: $CONFIGURED"
+          echo "Thumbprint real (topo da cadeia TLS): $LIVE"
+
+          {
+            echo "## OIDC thumbprint check"
+            echo "- Configurado na AWS: \`$CONFIGURED\`"
+            echo "- Live (TLS leaf): \`$LIVE\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$CONFIGURED" != "$LIVE" ]; then
+            echo "::warning::Thumbprint configurado diverge do thumbprint TLS atual. A AWS valida a cadeia de CA automaticamente para este emissor, então isso não bloqueia AssumeRoleWithWebIdentity -- mas revise modules/oidc-provider/variables.tf (thumbprint_list) e considere atualizar."
+          fi

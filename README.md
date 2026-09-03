@@ -68,20 +68,31 @@ policy de cada role valida:
 ```
 .
 ├── modules/
-│   ├── oidc-provider/     # Cria o IAM OIDC Provider (1x por conta AWS)
-│   └── iam-role/          # Role parametrizável: trust policy + boundary + tags
+│   ├── oidc-provider/           # Cria o IAM OIDC Provider (1x por conta AWS)
+│   ├── iam-role/                # Role parametrizável: trust policy + boundary + tags
+│   │   └── tests/                # terraform test (mock_provider, sem AWS real)
+│   ├── config-required-tags/    # Opcional (Nível 3): AWS Config Rule required-tags
+│   ├── cloudtrail-sts-alerting/ # Opcional (Nível 3): alerting via EventBridge+SNS
+│   └── scp-examples/            # Referência (não Terraform ativo): SCPs de exemplo
 ├── envs/
-│   ├── shared/            # Bootstrap: OIDC Provider + permissions boundary
+│   ├── shared/            # Bootstrap: OIDC Provider + boundary + role de CI plan
 │   ├── dev/                # Role de dev (trust por branch)
 │   ├── staging/             # Role de staging (trust por branch)
 │   └── prod/               # Role de prod (trust por GitHub Environment)
 ├── policies/
 │   ├── permissions-boundary.json        # Boundary em JSON puro (referência)
 │   └── permissions-boundary.README.md   # Explicação statement-a-statement
+├── docs/
+│   ├── optional-modules.md          # Índice dos módulos opt-in de Nível 3
+│   └── multi-account-migration.md   # Roteiro Nível 2 -> Nível 3 (multi-conta/SCP)
 ├── .github/workflows/
 │   ├── deploy-dev.yml
 │   ├── deploy-staging.yml
-│   └── deploy-prod.yml
+│   ├── deploy-prod.yml
+│   ├── terraform-ci.yml            # fmt + validate + test + tflint
+│   ├── terraform-plan.yml          # plan em PRs via role read-only
+│   └── oidc-thumbprint-check.yml   # cron semanal, somente leitura
+├── CONTRIBUTING.md
 ├── SECURITY.md
 └── README.md
 ```
@@ -140,7 +151,42 @@ variáveis/secrets do repositório, se preferir não deixar o ARN em texto
 plano no workflow — o ARN de uma role não é secreto, mas manter como
 variável facilita reuso entre workflows).
 
-### 6. Testar
+### 6. (Opcional) Habilitar o CI de `terraform plan` em PRs
+
+`.github/workflows/terraform-plan.yml` roda `terraform plan` em Pull
+Requests que tocam `.tf`, usando a role somente-leitura
+`envs/shared/ci-plan-role.tf` (output `ci_plan_role_arn`) — nunca uma role
+de deploy. Para habilitar:
+
+1. Preencha `github_org`, `github_repo` (obrigatórios) e, se for usar este
+   workflow, `terraform_state_bucket_arn`/`terraform_lock_table_arn`
+   (opcionais) em `envs/shared/terraform.tfvars` e rode `terraform apply`
+   novamente em `envs/shared`.
+2. Em **Settings > Secrets and variables > Actions > Variables** do
+   repositório, crie (não são segredos — nomes de bucket/role não são
+   sensíveis):
+   - `CI_PLAN_ROLE_ARN` — output `ci_plan_role_arn` do passo acima.
+   - `TF_STATE_BUCKET`, `TF_STATE_LOCK_TABLE`, `TF_STATE_REGION` — mesmos
+     valores usados nos `backend.tf` locais de cada ambiente.
+   - `TF_PROJECT` — mesmo valor de `var.project`.
+   - `OIDC_PROVIDER_ARN` — output `oidc_provider_arn` de `envs/shared`.
+     Usado só pelo workflow `oidc-thumbprint-check.yml` (ver
+     [docs/optional-modules.md](./docs/optional-modules.md)), não pelo
+     `terraform-plan.yml`.
+
+Sem essas Variables configuradas, o workflow falha no `terraform init` (não
+há credenciais/backend para inicializar) — isso é intencional, não há
+fallback silencioso.
+
+### 7. Testar
+
+> **Fora de escopo deste repo**: os workflows `deploy-*.yml` fazem `aws s3
+> sync` contra `<PROJECT>-<env>-deploy-artifacts` e `aws lambda
+> update-function-code` contra `<PROJECT>-<env>-api`. Este repo provisiona
+> **só a autenticação** (OIDC provider + roles); o bucket S3 e a função
+> Lambda em si precisam já existir, criados por outro pipeline/IaC do seu
+> app — caso contrário os steps de deploy falham com "bucket/function not
+> found" mesmo com a role assumida corretamente.
 
 - Faça um push em `main` → o workflow `deploy-dev.yml` deve rodar e assumir
   a role de dev sem intervenção manual.

@@ -9,12 +9,12 @@
 # -----------------------------------------------------------------------------
 
 variable "environment" {
-  description = "Nome do ambiente ao qual esta role pertence (dev, staging ou prod). Usado para nomear recursos e como trilha de auditoria em logs/CloudTrail."
+  description = "Nome do ambiente ao qual esta role pertence (dev, staging, prod, ou shared para roles de bootstrap/CI que não pertencem a um ambiente de deploy). Usado para nomear recursos e como trilha de auditoria em logs/CloudTrail."
   type        = string
 
   validation {
-    condition     = contains(["dev", "staging", "prod"], var.environment)
-    error_message = "environment deve ser um de: dev, staging, prod."
+    condition     = contains(["dev", "staging", "prod", "shared"], var.environment)
+    error_message = "environment deve ser um de: dev, staging, prod, shared."
   }
 }
 

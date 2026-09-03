@@ -4,3 +4,14 @@
 aws_region = "us-east-1"
 project    = "<PROJECT>"
 owner      = "<OWNER>"
+
+# Usados pela trust policy da role de CI plan (ci-plan-role.tf):
+github_org  = "<ORG>"
+github_repo = "<REPO>"
+
+# Opcionais -- preencha se quiser que a role de CI plan consiga ler o
+# backend de state remoto durante "terraform plan" em PRs (ver
+# .github/workflows/terraform-plan.yml). Deixe comentado/omitido se ainda
+# não for usar esse workflow.
+# terraform_state_bucket_arn = "arn:aws:s3:::<TERRAFORM_STATE_BUCKET>"
+# terraform_lock_table_arn   = "arn:aws:dynamodb:us-east-1:<AWS_ACCOUNT_ID>:table/<TERRAFORM_LOCK_TABLE>"

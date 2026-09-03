@@ -124,17 +124,44 @@ Considere evoluir além deste esqueleto quando:
   `AssumeRoleWithWebIdentity` fora do padrão esperado, não apenas prevenção
   preventiva via IAM.
 
+## O que este projeto cobre como opt-in (Nível 3, desligado por padrão)
+
+Os itens abaixo existem no repo como módulos/workflows opcionais — nenhum
+ativo por padrão, para que clonar este esqueleto continue em Nível 2 até
+uma decisão consciente de subir o nível. Ver
+[`docs/optional-modules.md`](./docs/optional-modules.md) para como habilitar
+cada um.
+
+- **AWS Config Rules / compliance contínuo de tags em recursos
+  pré-existentes** — `modules/config-required-tags`, flag
+  `enable_config_required_tags`.
+- **Alerting/observabilidade sobre uso das roles (CloudTrail + EventBridge)**
+  — `modules/cloudtrail-sts-alerting`, flag `enable_sts_alerting`.
+- **Rotação/versionamento automático do thumbprint do OIDC provider** —
+  workflow `oidc-thumbprint-check.yml` (sempre ativo, somente leitura).
+- **Testes automatizados de policy** — `terraform test` em
+  `modules/*/tests/*.tftest.hcl`, rodando no CI (`terraform-ci.yml`).
+- **Visibilidade de diff de infra antes do merge** — workflow
+  `terraform-plan.yml`, via role read-only dedicada
+  (`envs/shared/ci-plan-role.tf`).
+
 ## O que este projeto explicitamente NÃO cobre (ainda)
 
-- AWS Config Rules / compliance contínuo de tags em recursos pré-existentes.
-- Alerting/observabilidade sobre uso das roles (CloudTrail + EventBridge).
-- Rotação/versionamento automático do thumbprint do OIDC provider.
-- Multi-conta / AWS Organizations / SCPs.
-- Testes automatizados de policy (ex: `terraform test`, `conftest`/OPA sobre
-  os planos de Terraform).
+- **Multi-conta / AWS Organizations / SCPs** — depende de uma AWS
+  Organization real (management account, OU IDs) que este esqueleto não tem
+  como conhecer de antemão. Roteiro de migração + SCPs de exemplo em
+  [`docs/multi-account-migration.md`](./docs/multi-account-migration.md),
+  mas nenhum Terraform ativo neste repo.
+- **`conftest`/OPA sobre os planos de Terraform** — o `terraform test`
+  cobre validação de módulo; uma checagem de política sobre o plano gerado
+  (ex: "nenhuma policy pode ter `Resource: "*"`") é uma camada adicional
+  ainda não incluída.
+- **Infra de aplicação de exemplo** (bucket/Lambda que os workflows de
+  deploy assumem já existir) — deliberadamente fora de escopo; este repo
+  cobre só a autenticação, não o app (ver README, passo "Testar").
 
 Essas são extensões naturais para quem for evoluir este esqueleto — não
-foram incluídas para manter o escopo inicial gerenciável, conforme pedido.
+foram incluídas para manter o escopo gerenciável.
 
 ## Reportando vulnerabilidades
 

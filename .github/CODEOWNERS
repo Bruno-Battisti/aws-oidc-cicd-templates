@@ -1,0 +1,12 @@
+# Ajuste os placeholders abaixo antes de usar -- por padrão nada é
+# reforçado (nenhum handle real está listado).
+#
+# * @<ORG>/<TEAM>
+#
+# Para exigir revisão extra em mudanças de segurança sensível (boundary,
+# trust policies, módulos opcionais de Nível 3), considere donos mais
+# restritos nesses caminhos específicos, ex:
+#
+# /envs/shared/permissions-boundary.tf @<ORG>/<SECURITY_TEAM>
+# /envs/prod/                          @<ORG>/<SECURITY_TEAM>
+# /policies/                           @<ORG>/<SECURITY_TEAM>

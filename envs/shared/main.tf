@@ -23,3 +23,21 @@ module "github_oidc_provider" {
 
   tags = local.common_tags
 }
+
+# Nível 3, opcional -- ver docs/optional-modules.md. count = 0 por padrão.
+module "config_required_tags" {
+  source = "../../modules/config-required-tags"
+  count  = var.enable_config_required_tags ? 1 : 0
+
+  tag_keys = var.config_required_tags_keys
+  tags     = local.common_tags
+}
+
+# Nível 3, opcional -- ver docs/optional-modules.md. count = 0 por padrão.
+module "sts_alerting" {
+  source = "../../modules/cloudtrail-sts-alerting"
+  count  = var.enable_sts_alerting ? 1 : 0
+
+  alert_email = var.sts_alert_email
+  tags        = local.common_tags
+}

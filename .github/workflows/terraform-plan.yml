@@ -1,0 +1,93 @@
+name: Terraform Plan (PR)
+
+# Roda "terraform plan" contra o backend real em cada root, usando uma role
+# somente leitura (envs/shared/ci-plan-role.tf) via OIDC -- nunca a role de
+# deploy, que tem permissão de escrita. O objetivo é dar visibilidade do
+# diff de infra antes do merge, não aplicar nada.
+on:
+  pull_request:
+    paths:
+      - "**/*.tf"
+      - ".github/workflows/terraform-plan.yml"
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+env:
+  TERRAFORM_VERSION: "1.16.0"
+
+jobs:
+  plan:
+    name: plan (${{ matrix.dir }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dir:
+          - envs/shared
+          - envs/dev
+          - envs/staging
+          - envs/prod
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      # backend.tf é gitignored por design (ver .gitignore) -- cada
+      # ambiente é responsável por gerá-lo localmente a partir do próprio
+      # backend.tf.example. Em CI, geramos o equivalente a partir de repo
+      # Variables (não-secretas: nome de bucket/tabela não é sensível) para
+      # não commitar esses valores no repo.
+      - name: Generate backend.tf from repo variables
+        working-directory: ${{ matrix.dir }}
+        run: |
+          cat > backend.tf <<EOF
+          terraform {
+            backend "s3" {
+              bucket         = "${{ vars.TF_STATE_BUCKET }}"
+              key            = "${{ vars.TF_PROJECT }}/$(basename "${{ matrix.dir }}")/terraform.tfstate"
+              region         = "${{ vars.TF_STATE_REGION }}"
+              dynamodb_table = "${{ vars.TF_STATE_LOCK_TABLE }}"
+              encrypt        = true
+            }
+          }
+          EOF
+
+      - name: Configure AWS credentials (OIDC, read-only)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.CI_PLAN_ROLE_ARN }}
+          aws-region: ${{ vars.TF_STATE_REGION }}
+          role-session-name: gha-ci-plan-${{ github.run_id }}
+
+      - name: terraform init
+        working-directory: ${{ matrix.dir }}
+        run: terraform init -input=false
+
+      - name: terraform plan
+        id: plan
+        working-directory: ${{ matrix.dir }}
+        run: terraform plan -input=false -no-color -out=tfplan
+        continue-on-error: true
+
+      - name: Post plan summary
+        if: always()
+        working-directory: ${{ matrix.dir }}
+        run: |
+          {
+            echo "## Plan: \`${{ matrix.dir }}\`"
+            echo '```'
+            terraform show -no-color tfplan 2>/dev/null || echo "(plan falhou -- ver logs do job)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail job if plan failed
+        if: steps.plan.outcome == 'failure'
+        run: exit 1
